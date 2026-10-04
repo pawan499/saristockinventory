@@ -113,7 +113,7 @@ export function createApp({ recognize = recognizeBill } = {}) {
       try { result = await recognize(filename); }
       catch { fail(502, 'OCR failed. Check language-data connectivity and retry with a clear image'); }
       const bill = await Bill.create({ createdBy: req.user.id, image: filename, rawText: result.text || ' ', confidence: result.confidence, suggestedItems: parseBillText(result.text || '', companyName) });
-      res.status(201).json({ bill, needsReview: true, message: 'Review companyName, sariName, quantity and unit price; then submit items to the confirm endpoint.' });
+      res.status(201).json({ bill, needsReview: true, message: 'Review companyName, sariName, Pcs quantity and pre-GST Rate. Add 5% GST once to each unit rate before submitting final prices to the confirm endpoint.' });
     } catch (err) { await removeImage(filename); throw err; }
     finally { ocrBusy = false; }
   });
