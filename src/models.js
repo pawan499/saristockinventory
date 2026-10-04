@@ -21,11 +21,13 @@ const billSchema = new Schema({
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   image: { type: String, required: true },
   rawText: { type: String, required: true },
+  clientId: String,
   confidence: Number,
   suggestedItems: { type: [Schema.Types.Mixed], default: [] },
   status: { type: String, enum: ['pending', 'imported'], default: 'pending' },
   importedAt: Date,
 }, { timestamps: true });
+billSchema.index({ createdBy: 1, clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } });
 export const User = mongoose.model('User', userSchema);
 export const Sari = mongoose.model('Sari', sariSchema);
 export const Bill = mongoose.model('Bill', billSchema);

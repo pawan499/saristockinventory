@@ -101,6 +101,25 @@ export function createApp({ recognize = recognizeBill } = {}) {
     if (!owned) fail(404, 'Image not found');
     res.sendFile(filename, { root: config.uploadDir });
   });
+  // Device OCR has already populated the review table. Register the photo
+  // without repeating OCR; clientId makes a lost-response retry idempotent.
+  app.post('/api/bills/draft', upload.single('image'), async (req, res) => {
+    const clientId = z.string().uuid().parse(req.body?.clientId);
+    const existing = await Bill.findOne({ createdBy: req.user.id, clientId });
+    if (existing) return res.json({ bill: existing });
+    const filename = await saveImage(req.file);
+    try {
+      const bill = await Bill.create({ createdBy: req.user.id, clientId, image: filename, rawText: 'Read on device', suggestedItems: [] });
+      res.status(201).json({ bill });
+    } catch (error) {
+      await removeImage(filename);
+      if (error.code === 11000) {
+        const bill = await Bill.findOne({ createdBy: req.user.id, clientId });
+        if (bill) return res.json({ bill });
+      }
+      throw error;
+    }
+  });
   let ocrBusy = false;
   app.post('/api/bills/extract', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10 }), upload.single('image'), async (req, res) => {
     const companyName = z.string().trim().max(150).default('').parse(req.body?.companyName);

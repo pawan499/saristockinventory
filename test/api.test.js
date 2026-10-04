@@ -97,3 +97,25 @@ test('bill extraction requires review; confirmation is transactional and cannot 
 test('OCR parser skips totals and handles table separators', () => {
   assert.deepEqual(parseBillText('1. Silk Sari | 3 | 1,200.50 | 3601.50\nGST 5 100\nTotal 3601.50', 'ABC'), [{ companyName: 'ABC', sariName: 'Silk Sari', quantity: 3, price: 1200.5 }]);
 });
+
+test('device bill registration is idempotent and reviewed GST prices save exactly once', async () => {
+  const clientId = '8f47993e-3dd1-4e22-a3ee-3de0cbf040f9';
+  const register = () => request(app).post('/api/bills/draft').set(auth()).field('clientId', clientId).attach('image', image, 'bill.png');
+  const [first, second] = await Promise.all([register(), register()]);
+  assert.ok([200, 201].includes(first.status));
+  assert.ok([200, 201].includes(second.status));
+  assert.equal(first.body.bill._id, second.body.bill._id);
+  const id = first.body.bill._id;
+  assert.equal(await Sari.countDocuments({ bill: id }), 0);
+  const items = [
+    { companyName: 'MISHRI', sariName: 'GOLDEN ZOYA', quantity: 6, price: 436.80 },
+    { companyName: 'JAY BHARAT', sariName: 'BANSURI', quantity: 4, price: 223.65 },
+  ];
+  const result = await request(app).post(`/api/bills/${id}/confirm`).set(auth()).send({ items });
+  assert.equal(result.status, 201);
+  assert.equal(result.body.count, 2);
+  const stored = await Sari.find({ bill: id }).lean();
+  assert.deepEqual(stored.map(({ companyName, sariName, quantity, price }) => ({ companyName, sariName, quantity, price })), items);
+  assert.equal((await request(app).post(`/api/bills/${id}/confirm`).set(auth()).send({ items })).status, 409);
+  assert.equal(await Sari.countDocuments({ bill: id }), 2);
+});
